@@ -15,14 +15,14 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-public class KafkaDataSourceTask implements DataSourceTask {
+public class PublishingDataSourceTask implements DataSourceTask {
 
     private final Collection<Path> logDirs;
     private final long period;
     private final TimeUnit timeUnit;
     private final VolumeMetricsPublisher volumeMetricsPublisher;
 
-    public KafkaDataSourceTask(Collection<Path> logDirs, long period, TimeUnit timeUnit, VolumeMetricsPublisher volumeMetricsPublisher) {
+    public PublishingDataSourceTask(Collection<Path> logDirs, long period, TimeUnit timeUnit, VolumeMetricsPublisher volumeMetricsPublisher) {
         this.logDirs = logDirs;
         this.period = period;
         this.timeUnit = timeUnit;

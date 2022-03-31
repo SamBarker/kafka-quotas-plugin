@@ -162,8 +162,8 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
             scheduledDataSourceTask.cancel(false);
             //We don't care what the return value is we just want to ensure it will not re-trigger
         }
-        final KafkaDataSourceTask kafkaDataSourceTask = new KafkaDataSourceTask(logDirs, config.getStorageCheckInterval(), TimeUnit.SECONDS, null);
-        scheduledDataSourceTask = executorService.scheduleWithFixedDelay(kafkaDataSourceTask, 0L, kafkaDataSourceTask.getDelay(), kafkaDataSourceTask.getPeriodUnit());
+        final PublishingDataSourceTask publishingDataSourceTask = new PublishingDataSourceTask(logDirs, config.getStorageCheckInterval(), TimeUnit.SECONDS, null);
+        scheduledDataSourceTask = executorService.scheduleWithFixedDelay(publishingDataSourceTask, 0L, publishingDataSourceTask.getDelay(), publishingDataSourceTask.getPeriodUnit());
         log.info("Configured quota callback with {}. Storage quota (soft, hard): ({}, {}). Storage check interval: {}ms", quotaMap, storageQuotaSoft, storageQuotaHard, storageCheckIntervalMillis);
         if (!excludedPrincipalNameList.isEmpty()) {
             log.info("Excluded principals {}", excludedPrincipalNameList);

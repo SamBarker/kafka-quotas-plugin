@@ -24,7 +24,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.iterable;
 
-class KafkaDataSourceTaskTest {
+class PublishingDataSourceTaskTest {
 
 
     private static final long TEN_GB = 10737418240L;
@@ -56,7 +56,7 @@ class KafkaDataSourceTaskTest {
     @Test
     void shouldPublishVolumeUsageMetrics() throws IOException {
         //Given
-        final KafkaDataSourceTask sourceTask = new KafkaDataSourceTask(Set.of(logDir), 30, TimeUnit.SECONDS, kafkaPublisher);
+        final PublishingDataSourceTask sourceTask = new PublishingDataSourceTask(Set.of(logDir), 30, TimeUnit.SECONDS, kafkaPublisher);
         final FileStore fileStore = Files.getFileStore(logDir);
         final VolumeDetails expected = new VolumeDetails(fileStore.name(), TEN_GB, 0L);
 
@@ -73,7 +73,7 @@ class KafkaDataSourceTaskTest {
     @Test
     void shouldPublishVolumeUsageMetricsForMultipleLogDirs(@TempDir Path additionalLogDir) {
         //Given
-        final KafkaDataSourceTask sourceTask = new KafkaDataSourceTask(Set.of(logDir, additionalLogDir), 30, TimeUnit.SECONDS, kafkaPublisher);
+        final PublishingDataSourceTask sourceTask = new PublishingDataSourceTask(Set.of(logDir, additionalLogDir), 30, TimeUnit.SECONDS, kafkaPublisher);
 
         //When
         sourceTask.run();
@@ -89,7 +89,7 @@ class KafkaDataSourceTaskTest {
     @Test
     void shouldNotPublishIfLogDirDoesntExist() {
         //Given
-        final KafkaDataSourceTask sourceTask = new KafkaDataSourceTask(Set.of(fileSystem.getPath("logdir2")), 30, TimeUnit.SECONDS, kafkaPublisher);
+        final PublishingDataSourceTask sourceTask = new PublishingDataSourceTask(Set.of(fileSystem.getPath("logdir2")), 30, TimeUnit.SECONDS, kafkaPublisher);
 
         //When
         sourceTask.run();
