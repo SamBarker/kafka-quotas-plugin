@@ -42,7 +42,7 @@ public class KafkaDataSourceTask implements DataSourceTask {
     }
 
     @Override
-    public long getPeriod() {
+    public long getDelay() {
         return period;
     }
 

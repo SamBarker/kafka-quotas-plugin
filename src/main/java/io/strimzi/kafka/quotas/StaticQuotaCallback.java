@@ -9,6 +9,9 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -42,17 +45,20 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
     private volatile List<String> excludedPrincipalNameList = List.of();
     private final AtomicBoolean resetQuota = new AtomicBoolean(true);
     private final StorageChecker storageChecker;
+    private final ScheduledExecutorService executorService;
     private final static long LOGGING_DELAY_MS = 1000;
     private AtomicLong lastLoggedMessageSoftTimeMs = new AtomicLong(0);
     private AtomicLong lastLoggedMessageHardTimeMs = new AtomicLong(0);
     private final String scope = "io.strimzi.kafka.quotas.StaticQuotaCallback";
+    private volatile ScheduledFuture<?> scheduledDataSourceTask;
 
     public StaticQuotaCallback() {
-        this(new StorageChecker());
+        this(new StorageChecker(), createDefaultExecutorService());
     }
 
-    StaticQuotaCallback(StorageChecker storageChecker) {
+    StaticQuotaCallback(StorageChecker storageChecker, ScheduledExecutorService executorService) {
         this.storageChecker = storageChecker;
+        this.executorService = executorService;
     }
 
     @Override
@@ -152,7 +158,12 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
         storageChecker.configure(storageCheckIntervalMillis,
                 logDirs,
                 this::updateUsedStorage);
-
+        if (scheduledDataSourceTask != null) {
+            scheduledDataSourceTask.cancel(false);
+            //We don't care what the return value is we just want to ensure it will not re-trigger
+        }
+        final KafkaDataSourceTask kafkaDataSourceTask = new KafkaDataSourceTask(logDirs, config.getStorageCheckInterval(), TimeUnit.SECONDS, null);
+        scheduledDataSourceTask = executorService.scheduleWithFixedDelay(kafkaDataSourceTask, 0L, kafkaDataSourceTask.getDelay(), kafkaDataSourceTask.getPeriodUnit());
         log.info("Configured quota callback with {}. Storage quota (soft, hard): ({}, {}). Storage check interval: {}ms", quotaMap, storageQuotaSoft, storageQuotaHard, storageCheckIntervalMillis);
         if (!excludedPrincipalNameList.isEmpty()) {
             log.info("Excluded principals {}", excludedPrincipalNameList);
@@ -192,6 +203,15 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
         String type = clazz.getSimpleName();
         String mBeanName = String.format("%s:type=%s,name=%s", group, type, name);
         return new MetricName(group, type, name, this.scope, mBeanName);
+    }
+
+    private static ScheduledExecutorService createDefaultExecutorService() {
+
+        return Executors.newSingleThreadScheduledExecutor(r -> {
+            final Thread backgroundExecutor = new Thread(r, "StaticQuotaCallbackBackgroundExecutor");
+            backgroundExecutor.setDaemon(true);
+            return backgroundExecutor;
+        });
     }
 
     private static class ClientQuotaGauge extends Gauge<Double> {

@@ -4,19 +4,12 @@
  */
 package io.strimzi.kafka.quotas;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-
 import java.util.Map;
 import java.util.Optional;
 import java.util.SortedMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import com.yammer.metrics.Metrics;
@@ -29,19 +22,78 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+
+import static io.strimzi.kafka.quotas.StaticQuotaConfig.LOG_DIRS_PROP;
+import static io.strimzi.kafka.quotas.StaticQuotaConfig.STORAGE_CHECK_INTERVAL_PROP;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 class StaticQuotaCallbackTest {
 
     StaticQuotaCallback target;
+    private ScheduledExecutorService executorService;
 
     @BeforeEach
     void setup() {
-        target = new StaticQuotaCallback();
+        executorService = mock(ScheduledExecutorService.class);
+        target = new StaticQuotaCallback(new StorageChecker(), executorService);
     }
 
     @AfterEach
     void tearDown() {
         target.close();
+    }
+
+    @Test
+    void shouldScheduleDataSourceTaskOnConfigure() {
+        //Given
+        final Long delay = 100L;
+
+        //When
+        target.configure(Map.of(
+                LOG_DIRS_PROP, "/data/logDir1",
+                STORAGE_CHECK_INTERVAL_PROP, delay.intValue()
+        ));
+
+        //Then
+        verify(executorService).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(delay), eq(TimeUnit.SECONDS));
+    }
+
+    @Test
+    void shouldCancelExistingDataSourceTaskOn() {
+        //Given
+        final Long delay = 100L;
+        final ScheduledFuture<?> scheduledFuture1 = mock(ScheduledFuture.class, "future1");
+        final ScheduledFuture<?> scheduledFuture2 = mock(ScheduledFuture.class, "future2");
+        Mockito.doReturn(scheduledFuture1, scheduledFuture2)
+                .when(executorService)
+                .scheduleWithFixedDelay(any(), anyLong(), anyLong(), any(TimeUnit.class));
+
+        target.configure(Map.of(
+                LOG_DIRS_PROP, "/data/logDir1",
+                STORAGE_CHECK_INTERVAL_PROP, 50
+        ));
+
+        //When
+        target.configure(Map.of(
+                LOG_DIRS_PROP, "/data/logDir1",
+                STORAGE_CHECK_INTERVAL_PROP, delay.intValue()
+        ));
+
+        //Then
+        verify(scheduledFuture1).cancel(false);
+        verify(executorService).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(50L), eq(TimeUnit.SECONDS));
+        verify(executorService).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(delay), eq(TimeUnit.SECONDS));
     }
 
     @Test
@@ -69,7 +121,7 @@ class StaticQuotaCallbackTest {
     void excludedPrincipal() {
         KafkaPrincipal foo = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "foo");
         target.configure(Map.of(StaticQuotaConfig.EXCLUDED_PRINCIPAL_NAME_LIST_PROP, "foo,bar",
-                                StaticQuotaConfig.PRODUCE_QUOTA_PROP, 1024));
+                StaticQuotaConfig.PRODUCE_QUOTA_PROP, 1024));
         double fooQuotaLimit = target.quotaLimit(ClientQuotaType.PRODUCE, target.quotaMetricTags(ClientQuotaType.PRODUCE, foo, "clientId"));
         assertEquals(Double.MAX_VALUE, fooQuotaLimit);
 
@@ -81,7 +133,7 @@ class StaticQuotaCallbackTest {
     @Test
     void pluginLifecycle() throws Exception {
         StorageChecker mock = mock(StorageChecker.class);
-        StaticQuotaCallback target = new StaticQuotaCallback(mock);
+        StaticQuotaCallback target = new StaticQuotaCallback(mock, executorService);
         target.configure(Map.of());
         target.updateClusterMetadata(null);
         verify(mock, times(1)).startIfNecessary();
@@ -94,7 +146,7 @@ class StaticQuotaCallbackTest {
         StorageChecker mock = mock(StorageChecker.class);
         ArgumentCaptor<Consumer<Long>> argument = ArgumentCaptor.forClass(Consumer.class);
         doNothing().when(mock).configure(anyLong(), anyList(), argument.capture());
-        StaticQuotaCallback quotaCallback = new StaticQuotaCallback(mock);
+        StaticQuotaCallback quotaCallback = new StaticQuotaCallback(mock, executorService);
         quotaCallback.configure(Map.of());
         Consumer<Long> storageUpdateConsumer = argument.getValue();
         quotaCallback.updateClusterMetadata(null);
@@ -117,7 +169,7 @@ class StaticQuotaCallbackTest {
         ArgumentCaptor<Consumer<Long>> argument = ArgumentCaptor.forClass(Consumer.class);
         doNothing().when(mock).configure(anyLong(), anyList(), argument.capture());
 
-        StaticQuotaCallback quotaCallback = new StaticQuotaCallback(mock);
+        StaticQuotaCallback quotaCallback = new StaticQuotaCallback(mock, executorService);
 
         quotaCallback.configure(Map.of(
                 StaticQuotaConfig.STORAGE_QUOTA_SOFT_PROP, 15L,

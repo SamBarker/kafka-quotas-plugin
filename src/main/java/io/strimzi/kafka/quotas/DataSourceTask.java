@@ -15,7 +15,7 @@ public interface DataSourceTask extends Runnable {
     @Override
     void run();
 
-    long getPeriod();
+    long getDelay();
 
     TimeUnit getPeriodUnit();
 }
