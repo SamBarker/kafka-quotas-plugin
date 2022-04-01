@@ -5,8 +5,9 @@
 
 package io.strimzi.kafka.quotas;
 
+import java.time.Instant;
 import java.util.Set;
 
 public interface VolumeMetricsPublisher {
-    void send(Set<VolumeDetails> volumeDetails);
+    void send(Instant snapshotAt, Set<VolumeDetails> volumeDetails);
 }

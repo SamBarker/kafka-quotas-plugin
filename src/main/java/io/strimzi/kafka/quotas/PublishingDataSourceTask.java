@@ -10,6 +10,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -38,7 +39,7 @@ public class PublishingDataSourceTask implements DataSourceTask {
                 .map(this::convertToVolumeDetails)
                 .collect(Collectors.toSet());
 
-        volumeMetricsPublisher.send(volumeDetails);
+        volumeMetricsPublisher.send(Instant.now(), volumeDetails);
     }
 
     @Override

@@ -5,6 +5,7 @@
 
 package io.strimzi.kafka.quotas;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -13,7 +14,7 @@ public class StubVolumeMetricsPublisher implements VolumeMetricsPublisher {
     private final List<Set<VolumeDetails>> updates = new ArrayList<>();
 
     @Override
-    public void send(Set<VolumeDetails> volumeDetails) {
+    public void send(Instant snapshotAt, Set<VolumeDetails> volumeDetails) {
         updates.add(volumeDetails);
     }
 

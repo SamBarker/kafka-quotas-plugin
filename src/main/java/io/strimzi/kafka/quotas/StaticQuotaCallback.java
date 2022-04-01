@@ -15,14 +15,21 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.metrics.Quota;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.ClientQuotaEntity;
 import org.apache.kafka.server.quota.ClientQuotaType;
@@ -46,19 +53,32 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
     private final AtomicBoolean resetQuota = new AtomicBoolean(true);
     private final StorageChecker storageChecker;
     private final ScheduledExecutorService executorService;
+    private final Supplier<KafkaProducer<String, VolumeDetailsMessage>> kafkaPublisherFactory;
     private final static long LOGGING_DELAY_MS = 1000;
     private AtomicLong lastLoggedMessageSoftTimeMs = new AtomicLong(0);
     private AtomicLong lastLoggedMessageHardTimeMs = new AtomicLong(0);
     private final String scope = "io.strimzi.kafka.quotas.StaticQuotaCallback";
     private volatile ScheduledFuture<?> scheduledDataSourceTask;
+    private final ObjectMapper mapper;
 
     public StaticQuotaCallback() {
-        this(new StorageChecker(), createDefaultExecutorService());
+        this(new StorageChecker(), createDefaultExecutorService(), () -> new KafkaProducer<>(Map.of(), new StringSerializer(), (topic, data) -> {
+            try {
+                //TODO wire in shared mapper
+                return new ObjectMapper().writeValueAsBytes(data);
+            } catch (JsonProcessingException e) {
+                log.warn("mapper screwed up", e);
+                throw new SerializationException("Error when serializing volume details message", e);
+            }
+        }));
     }
 
-    StaticQuotaCallback(StorageChecker storageChecker, ScheduledExecutorService executorService) {
+    StaticQuotaCallback(StorageChecker storageChecker, ScheduledExecutorService executorService, Supplier<KafkaProducer<String, VolumeDetailsMessage>> kafkaPublisherFactory) {
         this.storageChecker = storageChecker;
         this.executorService = executorService;
+        this.kafkaPublisherFactory = kafkaPublisherFactory;
+        mapper = new ObjectMapper();
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS); //Ensures we use ISO-8601
     }
 
     @Override
@@ -162,7 +182,9 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
             scheduledDataSourceTask.cancel(false);
             //We don't care what the return value is we just want to ensure it will not re-trigger
         }
-        final PublishingDataSourceTask publishingDataSourceTask = new PublishingDataSourceTask(logDirs, config.getStorageCheckInterval(), TimeUnit.SECONDS, null);
+
+        final KafkaProducer<String, VolumeDetailsMessage> kafkaProducer = kafkaPublisherFactory.get();
+        final PublishingDataSourceTask publishingDataSourceTask = new PublishingDataSourceTask(logDirs, config.getStorageCheckInterval(), TimeUnit.SECONDS, new KafkaVolumeMetricsPublisher(kafkaProducer, config.getVolumeMetricsTopic(), config.getBrokerId()));
         scheduledDataSourceTask = executorService.scheduleWithFixedDelay(publishingDataSourceTask, 0L, publishingDataSourceTask.getDelay(), publishingDataSourceTask.getPeriodUnit());
         log.info("Configured quota callback with {}. Storage quota (soft, hard): ({}, {}). Storage check interval: {}ms", quotaMap, storageQuotaSoft, storageQuotaHard, storageCheckIntervalMillis);
         if (!excludedPrincipalNameList.isEmpty()) {

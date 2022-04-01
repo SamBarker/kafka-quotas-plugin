@@ -5,12 +5,27 @@
 
 package io.strimzi.kafka.quotas;
 
+import java.time.Instant;
 import java.util.Set;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 
 public class KafkaVolumeMetricsPublisher implements VolumeMetricsPublisher {
 
-    @Override
-    public void send(Set<VolumeDetails> volumeDetails) {
+    private final KafkaProducer<String, VolumeDetailsMessage> kafkaProducer;
+    private final String topic;
+    private final String key;
 
+    public KafkaVolumeMetricsPublisher(KafkaProducer<String, VolumeDetailsMessage> kafkaProducer, String topic, String key) {
+        this.kafkaProducer = kafkaProducer;
+        this.topic = topic;
+        this.key = key;
     }
+
+    @Override
+    public void send(Instant snapshotAt, Set<VolumeDetails> volumeDetails) {
+        kafkaProducer.send(new ProducerRecord<>(topic, key, new VolumeDetailsMessage(snapshotAt, volumeDetails)));
+    }
+
 }
