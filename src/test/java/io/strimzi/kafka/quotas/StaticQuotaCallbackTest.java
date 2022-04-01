@@ -16,6 +16,7 @@ import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Metric;
 import com.yammer.metrics.core.MetricName;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.server.quota.ClientQuotaType;
 import org.junit.jupiter.api.AfterEach;
@@ -42,11 +43,14 @@ class StaticQuotaCallbackTest {
 
     StaticQuotaCallback target;
     private ScheduledExecutorService executorService;
+    private KafkaProducer<String, VolumeDetailsMessage> kafkaProducer;
 
+    @SuppressWarnings("unchecked")
     @BeforeEach
     void setup() {
+        kafkaProducer = mock(KafkaProducer.class);
         executorService = mock(ScheduledExecutorService.class);
-        target = new StaticQuotaCallback(new StorageChecker(), executorService);
+        target = new StaticQuotaCallback(new StorageChecker(), executorService, () -> kafkaProducer);
     }
 
     @AfterEach
@@ -130,10 +134,11 @@ class StaticQuotaCallbackTest {
         assertEquals(1024, bazQuotaLimit);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void pluginLifecycle() throws Exception {
         StorageChecker mock = mock(StorageChecker.class);
-        StaticQuotaCallback target = new StaticQuotaCallback(mock, executorService);
+        StaticQuotaCallback target = new StaticQuotaCallback(mock, executorService, () -> kafkaProducer);
         target.configure(Map.of());
         target.updateClusterMetadata(null);
         verify(mock, times(1)).startIfNecessary();
@@ -141,12 +146,13 @@ class StaticQuotaCallbackTest {
         verify(mock, times(1)).stop();
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void quotaResetRequired() {
         StorageChecker mock = mock(StorageChecker.class);
         ArgumentCaptor<Consumer<Long>> argument = ArgumentCaptor.forClass(Consumer.class);
         doNothing().when(mock).configure(anyLong(), anyList(), argument.capture());
-        StaticQuotaCallback quotaCallback = new StaticQuotaCallback(mock, executorService);
+        StaticQuotaCallback quotaCallback = new StaticQuotaCallback(mock, executorService, () -> kafkaProducer);
         quotaCallback.configure(Map.of());
         Consumer<Long> storageUpdateConsumer = argument.getValue();
         quotaCallback.updateClusterMetadata(null);
@@ -163,13 +169,14 @@ class StaticQuotaCallbackTest {
         quotaCallback.close();
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void storageCheckerMetrics() {
         StorageChecker mock = mock(StorageChecker.class);
         ArgumentCaptor<Consumer<Long>> argument = ArgumentCaptor.forClass(Consumer.class);
         doNothing().when(mock).configure(anyLong(), anyList(), argument.capture());
 
-        StaticQuotaCallback quotaCallback = new StaticQuotaCallback(mock, executorService);
+        StaticQuotaCallback quotaCallback = new StaticQuotaCallback(mock, executorService, () -> kafkaProducer);
 
         quotaCallback.configure(Map.of(
                 StaticQuotaConfig.STORAGE_QUOTA_SOFT_PROP, 15L,
