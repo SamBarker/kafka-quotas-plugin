@@ -27,5 +27,4 @@ public class KafkaVolumeMetricsPublisher implements VolumeMetricsPublisher {
     public void send(Instant snapshotAt, Set<VolumeDetails> volumeDetails) {
         kafkaProducer.send(new ProducerRecord<>(topic, key, new VolumeDetailsMessage(snapshotAt, volumeDetails)));
     }
-
 }

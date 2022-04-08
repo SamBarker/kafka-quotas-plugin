@@ -73,7 +73,7 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
         }));
     }
 
-    StaticQuotaCallback(StorageChecker storageChecker, ScheduledExecutorService executorService, Supplier<KafkaProducer<String, VolumeDetailsMessage>> kafkaPublisherFactory) {
+    /* test */ StaticQuotaCallback(StorageChecker storageChecker, ScheduledExecutorService executorService, Supplier<KafkaProducer<String, VolumeDetailsMessage>> kafkaPublisherFactory) {
         this.storageChecker = storageChecker;
         this.executorService = executorService;
         this.kafkaPublisherFactory = kafkaPublisherFactory;
