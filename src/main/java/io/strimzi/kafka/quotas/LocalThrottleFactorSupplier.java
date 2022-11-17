@@ -10,7 +10,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-public class LocalQuotaFactorSupplier implements QuotaFactorSupplier, Consumer<Double> {
+public class LocalThrottleFactorSupplier implements ThrottleFactorSupplier, Consumer<Double> {
     private final AtomicLong currentFactor = new AtomicLong();
     private final Set<Runnable> listeners = new CopyOnWriteArraySet<>();
     private static final double EPSILON = 0.00001;

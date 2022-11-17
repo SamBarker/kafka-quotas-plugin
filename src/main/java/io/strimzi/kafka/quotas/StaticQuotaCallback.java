@@ -54,8 +54,8 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
     private final ScheduledExecutorService backgroundScheduler;
 
     //Default to no restrictions until things have been configured.
-    private QuotaSupplier quotaSupplier = UnlimitedQuotaSupplier.UNLIMITED_QUOTA_SUPPLIER;
-    private QuotaFactorSupplier quotaFactorSupplier = UnlimitedQuotaSupplier.UNLIMITED_QUOTA_SUPPLIER;
+    private QuotaSupplier quotaSupplier = UnlimitedThrottleSupplier.UNLIMITED_QUOTA_SUPPLIER;
+    private ThrottleFactorSupplier throttleFactorSupplier = UnlimitedThrottleSupplier.UNLIMITED_QUOTA_SUPPLIER;
 
 
     public StaticQuotaCallback() {
@@ -91,7 +91,7 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
             final double requestQuota = quotaSupplier.quotaFor(quotaType, metricTags);
             if (ClientQuotaType.PRODUCE.equals(quotaType)) {
                 //Kafka will suffer an A divide by zero if returned 0.0 from `quotaLimit` so ensure that we don't even if we have zero quota available
-                limit = Math.max(requestQuota * quotaFactorSupplier.get(), QuotaSupplier.PAUSED);
+                limit = Math.max(requestQuota * throttleFactorSupplier.get(), QuotaSupplier.PAUSED);
             } else {
                 limit = requestQuota;
             }
@@ -160,7 +160,7 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
         excludedPrincipalNameList = config.getExcludedPrincipalNameList();
 
         quotaSupplier = config.quotaSupplier();
-        quotaFactorSupplier = config.quotaFactorSupplier();
+        throttleFactorSupplier = config.throttleFactorSupplier();
 
         long storageCheckIntervalMillis = TimeUnit.SECONDS.toMillis(config.getStorageCheckInterval());
 

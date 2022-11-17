@@ -92,8 +92,8 @@ public class StaticQuotaConfig extends AbstractConfig {
         return new StaticQuotaSupplier(getQuotaMap());
     }
 
-    public QuotaFactorSupplier quotaFactorSupplier() {
-        return UnlimitedQuotaSupplier.UNLIMITED_QUOTA_SUPPLIER;
+    public ThrottleFactorSupplier throttleFactorSupplier() {
+        return UnlimitedThrottleSupplier.UNLIMITED_QUOTA_SUPPLIER;
     }
 }
 

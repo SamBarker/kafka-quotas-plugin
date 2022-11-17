@@ -9,11 +9,11 @@ import java.util.Map;
 
 import org.apache.kafka.server.quota.ClientQuotaType;
 
-public class UnlimitedQuotaSupplier implements QuotaSupplier, QuotaFactorSupplier {
+public class UnlimitedThrottleSupplier implements QuotaSupplier, ThrottleFactorSupplier {
 
-    public static final UnlimitedQuotaSupplier UNLIMITED_QUOTA_SUPPLIER = new UnlimitedQuotaSupplier();
+    public static final UnlimitedThrottleSupplier UNLIMITED_QUOTA_SUPPLIER = new UnlimitedThrottleSupplier();
 
-    private UnlimitedQuotaSupplier() {
+    private UnlimitedThrottleSupplier() {
     }
 
     @Override

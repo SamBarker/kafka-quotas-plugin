@@ -13,7 +13,13 @@ import java.util.function.Supplier;
  * Where a value of `1.0` implies no additional restriction over and above the defined quota.
  * A value of `0.0` implies that there is no quota available regardless of the defined quota.
  */
-public interface QuotaFactorSupplier extends Supplier<Double> {
+public interface ThrottleFactorSupplier extends Supplier<Double> {
+
+    /**
+     * A listener to be notified when the factor changes so that
+     *
+     * @param listener to be notified when the factor changes
+     */
     void addUpdateListener(Runnable listener);
 
 }
