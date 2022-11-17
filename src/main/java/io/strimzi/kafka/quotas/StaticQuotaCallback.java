@@ -49,9 +49,14 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
     private final static long LOGGING_DELAY_MS = 1000;
     private AtomicLong lastLoggedMessageSoftTimeMs = new AtomicLong(0);
     private AtomicLong lastLoggedMessageHardTimeMs = new AtomicLong(0);
-    private final String scope = "io.strimzi.kafka.quotas.StaticQuotaCallback";
+    private static final String METRICS_SCOPE = "io.strimzi.kafka.quotas.StaticQuotaCallback";
 
     private final ScheduledExecutorService backgroundScheduler;
+
+    //Default to no restrictions until things have been configured.
+    private QuotaSupplier quotaSupplier = UnlimitedQuotaSupplier.UNLIMITED_QUOTA_SUPPLIER;
+    private QuotaFactorSupplier quotaFactorSupplier = UnlimitedQuotaSupplier.UNLIMITED_QUOTA_SUPPLIER;
+
 
     public StaticQuotaCallback() {
         this(new StorageChecker(), Executors.newSingleThreadScheduledExecutor(r -> {
@@ -79,22 +84,21 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
 
     @Override
     public Double quotaLimit(ClientQuotaType quotaType, Map<String, String> metricTags) {
+        final double limit;
         if (Boolean.TRUE.toString().equals(metricTags.get(EXCLUDED_PRINCIPAL_QUOTA_KEY))) {
-            return Quota.upperBound(Double.MAX_VALUE).bound();
+            limit = QuotaSupplier.UNLIMITED;
+        } else {
+            final double requestQuota = quotaSupplier.quotaFor(quotaType, metricTags);
+            if (ClientQuotaType.PRODUCE.equals(quotaType)) {
+                //Kafka will suffer an A divide by zero if returned 0.0 from `quotaLimit` so ensure that we don't even if we have zero quota available
+                limit = Math.max(requestQuota * quotaFactorSupplier.get(), QuotaSupplier.PAUSED);
+            } else {
+                limit = requestQuota;
+            }
         }
 
-        // Don't allow producing messages if we're beyond the storage limit.
-        long currentStorageUsage = storageUsed.get();
-        if (ClientQuotaType.PRODUCE.equals(quotaType) && currentStorageUsage > storageQuotaSoft && currentStorageUsage < storageQuotaHard) {
-            double minThrottle = quotaMap.getOrDefault(quotaType, Quota.upperBound(Double.MAX_VALUE)).bound();
-            double limit = minThrottle * (1.0 - (1.0 * (currentStorageUsage - storageQuotaSoft) / (storageQuotaHard - storageQuotaSoft)));
-            maybeLog(lastLoggedMessageSoftTimeMs, "Throttling producer rate because disk is beyond soft limit. Used: {}. Quota: {}", storageUsed, limit);
-            return limit;
-        } else if (ClientQuotaType.PRODUCE.equals(quotaType) && currentStorageUsage >= storageQuotaHard) {
-            maybeLog(lastLoggedMessageHardTimeMs, "Limiting producer rate because disk is full. Used: {}. Limit: {}", storageUsed, storageQuotaHard);
-            return 1.0;
-        }
-        return quotaMap.getOrDefault(quotaType, Quota.upperBound(Double.MAX_VALUE)).bound();
+        log.trace("Quota limit for metric tags {} : {}", metricTags, limit);
+        return limit;
     }
 
     /**
@@ -143,7 +147,7 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
         try {
             closeExecutorService();
         } finally {
-            Metrics.defaultRegistry().allMetrics().keySet().stream().filter(m -> scope.equals(m.getScope())).forEach(Metrics.defaultRegistry()::removeMetric);
+            Metrics.defaultRegistry().allMetrics().keySet().stream().filter(m -> METRICS_SCOPE.equals(m.getScope())).forEach(Metrics.defaultRegistry()::removeMetric);
         }
     }
 
@@ -154,6 +158,9 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
         storageQuotaSoft = config.getSoftStorageQuota();
         storageQuotaHard = config.getHardStorageQuota();
         excludedPrincipalNameList = config.getExcludedPrincipalNameList();
+
+        quotaSupplier = config.quotaSupplier();
+        quotaFactorSupplier = config.quotaFactorSupplier();
 
         long storageCheckIntervalMillis = TimeUnit.SECONDS.toMillis(config.getStorageCheckInterval());
 
@@ -206,11 +213,11 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
         }
     }
 
-    private MetricName metricName(Class<?> clazz, String name) {
+    public static MetricName metricName(Class<?> clazz, String name) {
         String group = clazz.getPackageName();
         String type = clazz.getSimpleName();
         String mBeanName = String.format("%s:type=%s,name=%s", group, type, name);
-        return new MetricName(group, type, name, this.scope, mBeanName);
+        return new MetricName(group, type, name, METRICS_SCOPE, mBeanName);
     }
 
     private static class ClientQuotaGauge extends Gauge<Double> {

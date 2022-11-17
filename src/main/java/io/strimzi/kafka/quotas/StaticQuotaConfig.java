@@ -4,14 +4,14 @@
  */
 package io.strimzi.kafka.quotas;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.metrics.Quota;
 import org.apache.kafka.server.quota.ClientQuotaType;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -83,6 +83,17 @@ public class StaticQuotaConfig extends AbstractConfig {
 
     List<String> getExcludedPrincipalNameList() {
         return getList(EXCLUDED_PRINCIPAL_NAME_LIST_PROP);
+    }
+
+    /**
+     * @return The configured quota source.
+     */
+    public QuotaSupplier quotaSupplier() {
+        return new StaticQuotaSupplier(getQuotaMap());
+    }
+
+    public QuotaFactorSupplier quotaFactorSupplier() {
+        return UnlimitedQuotaSupplier.UNLIMITED_QUOTA_SUPPLIER;
     }
 }
 
