@@ -5,6 +5,7 @@
 
 package io.strimzi.kafka.quotas;
 
+import java.util.Objects;
 import java.util.OptionalLong;
 
 public class Volume {
@@ -33,5 +34,27 @@ public class Volume {
 
     public long getConsumed() {
         return consumedSpace;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Volume volume = (Volume) o;
+        return capacity == volume.capacity && consumedSpace == volume.consumedSpace && Objects.equals(path, volume.path);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(path, capacity, consumedSpace);
+    }
+
+    @Override
+    public String toString() {
+        return "Volume{" +
+                "path='" + path + '\'' +
+                ", capacity=" + capacity +
+                ", consumedSpace=" + consumedSpace +
+                '}';
     }
 }

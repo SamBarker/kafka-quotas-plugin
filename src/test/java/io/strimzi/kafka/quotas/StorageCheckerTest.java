@@ -4,26 +4,40 @@
  */
 package io.strimzi.kafka.quotas;
 
-import java.nio.file.FileStore;
+import java.io.IOException;
+import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
+import com.google.common.jimfs.Configuration;
+import com.google.common.jimfs.Jimfs;
+import com.google.common.jimfs.PathType;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.google.common.jimfs.Feature.FILE_CHANNEL;
+import static com.google.common.jimfs.Feature.LINKS;
+import static com.google.common.jimfs.Feature.SECURE_DIRECTORY_STREAM;
+import static com.google.common.jimfs.Feature.SYMBOLIC_LINKS;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class StorageCheckerTest {
 
+    public static final Configuration UNIX_BUILDER = Configuration.builder(PathType.unix())
+            .setRoots("/")
+            .setWorkingDirectory("/work")
+            .setAttributeViews("basic")
+            .setBlockSize(1)
+            .setMaxSize(50)
+            .setSupportedFeatures(LINKS, SYMBOLIC_LINKS, SECURE_DIRECTORY_STREAM, FILE_CHANNEL).build();
+
     StorageChecker target;
 
-    @TempDir
-    Path tempDir;
+    Path logDir;
+
+    private FileSystem mockFileSystem;
 
     @BeforeEach
     void setup() {
