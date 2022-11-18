@@ -168,7 +168,8 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
             List<Path> logDirs = config.getLogDirs().stream().map(Paths::get).collect(Collectors.toList());
             storageChecker.configure(
                     logDirs,
-                    volumes -> { });
+                    volumes -> this.updateUsedStorage(volumes.stream().mapToLong(Volume::getConsumed).sum())
+            );
             backgroundScheduler.scheduleWithFixedDelay(storageChecker, storageCheckIntervalMillis, storageCheckIntervalMillis, TimeUnit.MILLISECONDS);
             log.info("Configured quota callback with {}. Storage quota (soft, hard): ({}, {}). Storage check interval: {}ms", quotaMap, storageQuotaSoft, storageQuotaHard, storageCheckIntervalMillis);
         }

@@ -40,46 +40,54 @@ public class StorageCheckerTest {
     private FileSystem mockFileSystem;
 
     @BeforeEach
-    void setup() {
+    void setup() throws IOException {
+        mockFileSystem = Jimfs.newFileSystem("MockFs1", UNIX_BUILDER);
+        logDir = Files.createDirectories(mockFileSystem.getPath("/logDir1"));
         target = new StorageChecker();
+    }
+
+    @AfterEach
+    void teardown() throws IOException {
+        if (mockFileSystem != null) {
+            mockFileSystem.close();
+        }
     }
 
     @Test
     void storageCheckCheckDiskUsageZeroWhenMissing() throws Exception {
-        target.configure(List.of(tempDir), storage -> { });
-        Files.delete(tempDir);
-        assertEquals(0, target.checkDiskUsage());
+        target.configure(List.of(logDir), storage -> {
+        });
+        Files.delete(logDir);
+        assertThat(target.checkDiskUsage()).isEmpty();
     }
 
     @Test
-    void storageCheckCheckDiskUsageAtLeastFileSize() throws Exception {
-        Path tempFile = Files.createTempFile(tempDir, "t", ".tmp");
-        target.configure(List.of(tempDir), storage -> { });
+    void storageCheckCheckDiskUsageEqualToFileSize() throws Exception {
+        Path tempFile = Files.createTempFile(logDir, "t", ".tmp");
+        target.configure(List.of(logDir), storage -> {
+        });
 
-        Files.writeString(tempFile, "0123456789");
-        long minSize = Files.size(tempFile);
-        assertTrue(target.checkDiskUsage() >= minSize);
+        final String content = "0123456789";
+        Files.writeString(tempFile, content);
+        assertThat(target.checkDiskUsage()).containsOnly(new Volume(Files.getFileStore(logDir).name(), 50L, content.getBytes().length));
     }
 
     @Test
-    void storageCheckCheckDiskUsageNotDoubled(@TempDir Path tempDir1, @TempDir Path tempDir2) throws Exception {
-        target.configure(List.of(tempDir1, tempDir2), storage -> { });
-
-        FileStore store = Files.getFileStore(tempDir1);
-        assertEquals(store.getTotalSpace() - store.getUsableSpace(), target.checkDiskUsage());
+    void storageCheckReturnsASingleVolumeIfMultiplePathsAreOnTheSameFilesystem() throws Exception {
+        final Path logDir2 = Files.createDirectories(mockFileSystem.getPath("/logDir2"));
+        target.configure(List.of(logDir, logDir2), storage -> {
+        });
+        assertThat(target.checkDiskUsage()).hasSize(1);
     }
 
+
     @Test
-    void testStorageCheckerEmitsUsedStorageValue() throws Exception {
-        Path tempFile = Files.createTempFile(tempDir, "t", ".tmp");
-        Files.writeString(tempFile, "0123456789");
-        long minSize = Files.size(tempFile);
-
-        CompletableFuture<Long> completableFuture = new CompletableFuture<>();
-        target.configure(List.of(tempDir), completableFuture::complete);
-        target.run();
-
-        Long storage = completableFuture.get(1, TimeUnit.SECONDS);
-        assertTrue(storage >= minSize);
+    void storageCheckReturnsMultipleVolumesIfTargetingDirectoriesOnMultipleFileSystems() throws Exception {
+        try (final FileSystem fileSystem2 = Jimfs.newFileSystem("mockfs2", UNIX_BUILDER)) {
+            final Path logDir2 = Files.createDirectories(fileSystem2.getPath("/logDir2"));
+            target.configure(List.of(logDir, logDir2), storage -> {
+            });
+            assertThat(target.checkDiskUsage()).hasSize(2);
+        }
     }
 }
