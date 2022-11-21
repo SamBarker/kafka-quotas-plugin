@@ -7,24 +7,24 @@ package io.strimzi.kafka.quotas;
 
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 public class LocalThrottleFactorSupplier implements ThrottleFactorSupplier, Consumer<Double> {
-    private final AtomicLong currentFactor = new AtomicLong();
+    private final AtomicReference<Double> currentFactor = new AtomicReference<>(1.0d);
     private final Set<Runnable> listeners = new CopyOnWriteArraySet<>();
     private static final double EPSILON = 0.00001;
 
     @Override
     public Double get() {
-        return Double.longBitsToDouble(currentFactor.get());
+        return currentFactor.get();
     }
 
     @Override
     public void accept(Double updatedQuotaFactor) {
         final double originalFactor = get();
         if (hasChanged(updatedQuotaFactor, originalFactor)) {
-            this.currentFactor.set(Double.doubleToLongBits(updatedQuotaFactor));
+            this.currentFactor.set(updatedQuotaFactor);
             listeners.forEach(Runnable::run);
         }
     }
