@@ -32,9 +32,11 @@ public class StaticQuotaConfig extends AbstractConfig {
     static final String STORAGE_QUOTA_HARD_PROP = "client.quota.callback.static.storage.hard";
     static final String STORAGE_CHECK_INTERVAL_PROP = "client.quota.callback.static.storage.check-interval";
     static final String LOG_DIRS_PROP = "log.dirs";
+    private TotalStorageThrottleFactorCalculator totalStorageThrottleFactorCalculator;
 
     /**
      * Construct a configuration for the static quota plugin.
+     *
      * @param props the configuration properties
      * @param doLog whether the configurations should be logged
      */
@@ -93,11 +95,16 @@ public class StaticQuotaConfig extends AbstractConfig {
     }
 
     public ThrottleFactorSupplier throttleFactorSupplier() {
-        return UnlimitedThrottleSupplier.UNLIMITED_QUOTA_SUPPLIER;
+        final LocalThrottleFactorSupplier localThrottleFactorSupplier = new LocalThrottleFactorSupplier();
+        throttleFactorCalculator().addListener(localThrottleFactorSupplier);
+        return localThrottleFactorSupplier;
     }
 
     public ThrottleFactorCalculator throttleFactorCalculator() {
-        return new TotalStorageThrottleFactorCalculator(getSoftStorageQuota(), getHardStorageQuota());
+        if (totalStorageThrottleFactorCalculator == null) {
+            totalStorageThrottleFactorCalculator = new TotalStorageThrottleFactorCalculator(getSoftStorageQuota(), getHardStorageQuota());
+        }
+        return totalStorageThrottleFactorCalculator;
     }
 }
 

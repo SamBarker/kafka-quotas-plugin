@@ -161,6 +161,7 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
 
         quotaSupplier = config.quotaSupplier();
         throttleFactorSupplier = config.throttleFactorSupplier();
+        throttleFactorSupplier.addUpdateListener(() -> resetQuota.add(ClientQuotaType.PRODUCE));
 
         long storageCheckIntervalMillis = TimeUnit.SECONDS.toMillis(config.getStorageCheckInterval());
 
@@ -168,7 +169,7 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
             List<Path> logDirs = config.getLogDirs().stream().map(Paths::get).collect(Collectors.toList());
             storageChecker.configure(
                     logDirs,
-                    volumes -> this.updateUsedStorage(volumes.stream().mapToLong(Volume::getConsumed).sum())
+                    config.throttleFactorCalculator()
             );
             backgroundScheduler.scheduleWithFixedDelay(storageChecker, storageCheckIntervalMillis, storageCheckIntervalMillis, TimeUnit.MILLISECONDS);
             log.info("Configured quota callback with {}. Storage quota (soft, hard): ({}, {}). Storage check interval: {}ms", quotaMap, storageQuotaSoft, storageQuotaHard, storageCheckIntervalMillis);
@@ -176,22 +177,6 @@ public class StaticQuotaCallback implements ClientQuotaCallback {
         if (!excludedPrincipalNameList.isEmpty()) {
             log.info("Excluded principals {}", excludedPrincipalNameList);
         }
-
-        Metrics.newGauge(metricName(StorageChecker.class, "TotalStorageUsedBytes"), new Gauge<Long>() {
-            public Long value() {
-                return storageUsed.get();
-            }
-        });
-        Metrics.newGauge(metricName(StorageChecker.class, "SoftLimitBytes"), new Gauge<Long>() {
-            public Long value() {
-                return storageQuotaSoft;
-            }
-        });
-        Metrics.newGauge(metricName(StorageChecker.class, "HardLimitBytes"), new Gauge<Long>() {
-            public Long value() {
-                return storageQuotaHard;
-            }
-        });
 
         quotaMap.forEach((clientQuotaType, quota) -> {
             String name = clientQuotaType.name().toUpperCase(ENGLISH).charAt(0) + clientQuotaType.name().toLowerCase(ENGLISH).substring(1);

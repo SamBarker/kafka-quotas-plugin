@@ -181,7 +181,8 @@ class StaticQuotaCallbackTest {
         ArgumentCaptor<Consumer<Collection<Volume>>> argument = ArgumentCaptor.forClass(Consumer.class);
         doNothing().when(mock).configure(anyList(), argument.capture());
         StaticQuotaCallback quotaCallback = new StaticQuotaCallback(mock, backgroundScheduler);
-        quotaCallback.configure(MINIMUM_EXECUTABLE_CONFIG);
+
+        quotaCallback.configure(Map.of(StaticQuotaConfig.STORAGE_QUOTA_SOFT_PROP, 10, StaticQuotaConfig.STORAGE_QUOTA_HARD_PROP, 15, StaticQuotaConfig.STORAGE_CHECK_INTERVAL_PROP, 10));
         Consumer<Collection<Volume>> storageUpdateConsumer = argument.getValue();
         quotaCallback.updateClusterMetadata(null);
 
@@ -191,7 +192,7 @@ class StaticQuotaCallbackTest {
         assertTrue(quotaCallback.quotaResetRequired(ClientQuotaType.PRODUCE), "unexpected state on subsequent call after 1st storage state change");
         storageUpdateConsumer.accept(List.of(VOLUME));
         assertFalse(quotaCallback.quotaResetRequired(ClientQuotaType.PRODUCE), "unexpected state on subsequent call without storage state change");
-        storageUpdateConsumer.accept(List.of(newVolume(2)));
+        storageUpdateConsumer.accept(List.of(newVolume(12)));
         assertTrue(quotaCallback.quotaResetRequired(ClientQuotaType.PRODUCE), "unexpected state on subsequent call after 2nd storage state change");
 
         quotaCallback.close();
