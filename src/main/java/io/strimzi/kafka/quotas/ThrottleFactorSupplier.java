@@ -16,7 +16,7 @@ import java.util.function.Supplier;
 public interface ThrottleFactorSupplier extends Supplier<Double> {
 
     /**
-     * A listener to be notified when the factor changes so that
+     * A listener to be notified when the factor changes so that additional actions can be performed.
      *
      * @param listener to be notified when the factor changes
      */
