@@ -95,5 +95,9 @@ public class StaticQuotaConfig extends AbstractConfig {
     public ThrottleFactorSupplier throttleFactorSupplier() {
         return UnlimitedThrottleSupplier.UNLIMITED_QUOTA_SUPPLIER;
     }
+
+    public ThrottleFactorCalculator throttleFactorCalculator() {
+        return new TotalStorageThrottleFactorCalculator(getSoftStorageQuota(), getHardStorageQuota());
+    }
 }
 
