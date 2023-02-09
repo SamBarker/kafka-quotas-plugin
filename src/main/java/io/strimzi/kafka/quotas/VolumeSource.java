@@ -61,16 +61,11 @@ public class VolumeSource implements Runnable {
         log.debug("Attempting to describe cluster");
         final DescribeClusterResult clusterResult = admin.describeCluster();
         try {
-            clusterResult.nodes().whenComplete((nodes, throwable) -> {
-                if (throwable != null) {
-                    log.error("error while describing cluster", throwable);
-                } else {
-                    if (log.isDebugEnabled()) {
-                        log.debug("Successfully described cluster: " + nodes);
-                    }
-                    onClusterDescribeSuccess(nodes);
-                }
-            }).get(timeout, timeoutUnit);
+            final Collection<Node> clusterNodes = clusterResult.nodes().get(timeout, timeoutUnit);
+            if (log.isDebugEnabled()) {
+                log.debug("Successfully described cluster: " + clusterNodes);
+            }
+            onClusterDescribeSuccess(clusterNodes);
         } catch (InterruptedException e) {
             log.warn("Caught interrupt exception trying to describe cluster: {}", e.getMessage(), e);
             Thread.currentThread().interrupt();
@@ -83,16 +78,19 @@ public class VolumeSource implements Runnable {
     private void onClusterDescribeSuccess(Collection<Node> nodes) {
         final Set<Integer> allBrokerIds = nodes.stream().map(Node::id).collect(toSet());
         final DescribeLogDirsResult logDirsResult = admin.describeLogDirs(allBrokerIds);
-        logDirsResult.allDescriptions().whenComplete((logDirsPerBroker, throwable) -> {
-            if (throwable != null) {
-                log.error("error while describing log dirs", throwable);
-            } else {
-                if (log.isDebugEnabled()) {
-                    log.debug("Successfully described logDirs: " + logDirsPerBroker);
-                }
-                onDescribeLogDirsSuccess(logDirsPerBroker);
+        try {
+            final Map<Integer, Map<String, LogDirDescription>> logDirsPerBroker = logDirsResult.allDescriptions().get(timeout, timeoutUnit);
+            if (log.isDebugEnabled()) {
+                log.debug("Successfully described logDirs: " + logDirsPerBroker);
             }
-        });
+            onDescribeLogDirsSuccess(logDirsPerBroker);
+        } catch (InterruptedException e) {
+            log.warn("Caught interrupt exception trying to describe logDirs: {}", e.getMessage(), e);
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException | TimeoutException e) {
+            log.warn("Caught exception trying to describe logDirs: {}", e.getMessage(), e);
+            //TODO should we cancel the futures here (specifically in the event of a timeout)?
+        }
     }
 
     private void onDescribeLogDirsSuccess(Map<Integer, Map<String, LogDirDescription>> logDirsPerBroker) {
