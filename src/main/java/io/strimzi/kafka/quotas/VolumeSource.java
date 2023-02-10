@@ -17,8 +17,6 @@ import java.util.stream.Stream;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.DescribeClusterResult;
-import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.admin.LogDirDescription;
 import org.apache.kafka.common.Node;
 import org.slf4j.Logger;
@@ -59,40 +57,36 @@ public class VolumeSource implements Runnable {
     @Override
     public void run() {
         log.debug("Attempting to describe cluster");
-        final DescribeClusterResult clusterResult = admin.describeCluster();
-        try {
-            clusterResult.nodes().whenComplete((nodes, throwable) -> {
-                if (throwable != null) {
-                    log.error("error while describing cluster", throwable);
-                } else {
-                    if (log.isDebugEnabled()) {
-                        log.debug("Successfully described cluster: " + nodes);
-                    }
-                    onClusterDescribeSuccess(nodes);
+        admin.describeCluster().nodes().whenComplete((nodes, throwable) -> {
+            if (throwable != null) {
+                log.error("error while describing cluster", throwable);
+            } else {
+                if (log.isDebugEnabled()) {
+                    log.debug("Successfully described cluster: " + nodes);
                 }
-            }).get(timeout, timeoutUnit);
-        } catch (InterruptedException e) {
-            log.warn("Caught interrupt exception trying to describe cluster: {}", e.getMessage(), e);
-            Thread.currentThread().interrupt();
-        } catch (ExecutionException | TimeoutException e) {
-            log.warn("Caught exception trying to describe cluster: {}", e.getMessage(), e);
-            //TODO should we cancel the futures here (specifically in the event of a timeout)?
-        }
+                //Deliberately stay on the adminClient thread as the next thing we do is another admin API call
+                onClusterDescribeSuccess(nodes);
+            }
+        });
     }
 
     private void onClusterDescribeSuccess(Collection<Node> nodes) {
         final Set<Integer> allBrokerIds = nodes.stream().map(Node::id).collect(toSet());
-        final DescribeLogDirsResult logDirsResult = admin.describeLogDirs(allBrokerIds);
-        logDirsResult.allDescriptions().whenComplete((logDirsPerBroker, throwable) -> {
-            if (throwable != null) {
-                log.error("error while describing log dirs", throwable);
-            } else {
-                if (log.isDebugEnabled()) {
-                    log.debug("Successfully described logDirs: " + logDirsPerBroker);
-                }
-                onDescribeLogDirsSuccess(logDirsPerBroker);
+
+        try {
+            final Map<Integer, Map<String, LogDirDescription>> logDirsPerBroker = admin.describeLogDirs(allBrokerIds)
+                    .allDescriptions()
+                    .get(timeout, timeoutUnit); //Pull things back onto the calling thread so as not to block the admin client
+            if (log.isDebugEnabled()) {
+                log.debug("Successfully described logDirs: " + logDirsPerBroker);
             }
-        });
+            onDescribeLogDirsSuccess(logDirsPerBroker);
+        } catch (InterruptedException e) {
+            log.warn("Caught interrupt exception trying to describe cluster and logDirs: {}", e.getMessage(), e);
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException | TimeoutException e) {
+            log.warn("Caught exception trying to describe cluster and logDirs: {}", e.getMessage(), e);
+        }
     }
 
     private void onDescribeLogDirsSuccess(Map<Integer, Map<String, LogDirDescription>> logDirsPerBroker) {
