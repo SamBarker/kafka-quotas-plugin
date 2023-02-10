@@ -65,12 +65,12 @@ public class VolumeSource implements Runnable {
                     log.debug("Successfully described cluster: " + nodes);
                 }
                 //Deliberately stay on the adminClient thread as the next thing we do is another admin API call
-                onClusterDescribeSuccess(nodes);
+                onDescribeClusterSuccess(nodes);
             }
         });
     }
 
-    private void onClusterDescribeSuccess(Collection<Node> nodes) {
+    private void onDescribeClusterSuccess(Collection<Node> nodes) {
         final Set<Integer> allBrokerIds = nodes.stream().map(Node::id).collect(toSet());
 
         try {
